@@ -55,6 +55,8 @@ monthly_accidents
 ```
 
 ```{r}
+library(ggplot2)
+
 epsilon_values <- 0.75
 
 monthly_accidents <- monthly_accidents %>%
@@ -65,7 +67,7 @@ monthly_accidents <- monthly_accidents %>%
   )
 
 plot <- ggplot(monthly_accidents, aes(x = epsilon, y = Total_Accidents_error)) +
-  geom_point(alpha = 0.5) +
+  geom_point(alpha = 1) +
   geom_jitter(color = "green") +
   labs(title = "Total Accidents Error Distribution for Epsilon",
        x = "Epsilon", y = "Total Accidents Error") +
@@ -73,7 +75,7 @@ plot <- ggplot(monthly_accidents, aes(x = epsilon, y = Total_Accidents_error)) +
 
 print(plot)
 
-ggsave("Epsilon_Total_Accidents_Error_Distribution.png", plot = plot, width = 12, height = 10)
+ggsave("Epsilon_Total_Accidents_Error_Distribution.png", plot = plot, width = 6, height = 5)
 
 ```
 
