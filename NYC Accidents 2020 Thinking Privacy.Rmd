@@ -1,0 +1,53 @@
+
+```{r}
+  install.packages("dplyr")
+  install.packages("ggplot2")
+```
+
+
+```{r}
+  accidents_data <- read.csv(file.choose())
+  accidents_data
+```
+
+```{r}
+library(dplyr)
+
+#Define the Laplace distribution generation function
+rlaplace <- function(n, location = 0, scale = 1) {
+  u <- runif(n, min = -0.5, max = 0.5)
+  return(location - scale * sign(u) * log(1 - 2 * abs(u)))
+}
+
+sensitivity <- 1
+epsilon <- 0.5
+
+#Add Laplacian noise function
+add_laplace_noise <- function(value, sensitivity, epsilon) {
+  scale <- sensitivity / epsilon
+  noise <- rlaplace(1, location = 0, scale = scale)
+  return(value + noise)
+}
+
+accidents_data$LATITUDE <- as.numeric(as.character(accidents_data$LATITUDE))
+accidents_data$LONGITUDE <- as.numeric(as.character(accidents_data$LONGITUDE))
+
+add_laplace_noise <- function(value, sensitivity, epsilon) {
+  scale <- sensitivity / epsilon
+  noise <- rlaplace(1, location = 0, scale = scale)
+  return(value + noise)
+}
+
+accidents_data$LATITUDE_Noisy <- ifelse(!is.na(accidents_data$LATITUDE),
+                                        sapply(accidents_data$LATITUDE, function(x) add_laplace_noise(x, sensitivity, epsilon)),NA)
+
+accidents_data$LONGITUDE_Noisy <- ifelse(!is.na(accidents_data$LONGITUDE),
+                                         sapply(accidents_data$LONGITUDE, function(x) add_laplace_noise(x, sensitivity, epsilon)),NA)
+
+position_data <- accidents_data[c("LATITUDE", "LATITUDE_Noisy", "LONGITUDE", "LONGITUDE_Noisy")]
+
+head(position_data)
+
+```
+
+
