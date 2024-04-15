@@ -13,16 +13,115 @@
 ```{r}
 library(dplyr)
 
-#Define the Laplace distribution generation function
+accidents_data$CRASH.DATE <- as.Date(accidents_data$CRASH.DATE, "%Y/%m/%d")
+accidents_data$Year <- format(accidents_data$CRASH.DATE, "%Y")
+accidents_data$Month <- format(accidents_data$CRASH.DATE, "%m")
+
+monthly_accidents <- accidents_data %>%
+  filter(Year == "2020") %>%
+  group_by(Month) %>%
+  summarise(Total_Accidents = n())
+
 rlaplace <- function(n, location = 0, scale = 1) {
   u <- runif(n, min = -0.5, max = 0.5)
   return(location - scale * sign(u) * log(1 - 2 * abs(u)))
 }
 
 sensitivity <- 1
-epsilon <- 0.5
+epsilon <- 0.75
 
-#Add Laplacian noise function
+add_laplace_noise <- function(value, sensitivity, epsilon) {
+  scale <- sensitivity / epsilon
+  noise <- rlaplace(1, location = 0, scale = scale)
+  return(value + noise)
+}
+
+monthly_accidents$Total_Accidents_Noisy <- sapply(monthly_accidents$Total_Accidents, function(x) add_laplace_noise(x, sensitivity, epsilon))
+
+print(monthly_accidents)
+
+```
+
+```{r}
+library(dplyr)
+
+monthly_accidents <- monthly_accidents %>%
+  mutate(
+    Total_Accidents_error = abs(Total_Accidents - Total_Accidents_Noisy),
+  )
+
+monthly_accidents 
+
+```
+
+```{r}
+epsilon_values <- 0.75
+
+monthly_accidents <- monthly_accidents %>%
+  mutate(
+    Total_Accidents_Noisy = Total_Accidents + rlaplace(n(), location = 0, scale = 1 / epsilon_values),
+    Total_Accidents_error = abs(Total_Accidents - Total_Accidents_Noisy),
+    epsilon = epsilon_values
+  )
+
+plot <- ggplot(monthly_accidents, aes(x = epsilon, y = Total_Accidents_error)) +
+  geom_point(alpha = 0.5) +
+  geom_jitter(color = "green") +
+  labs(title = "Total Accidents Error Distribution for Epsilon",
+       x = "Epsilon", y = "Total Accidents Error") +
+  theme_minimal()
+
+print(plot)
+
+ggsave("Epsilon_Total_Accidents_Error_Distribution.png", plot = plot, width = 12, height = 10)
+
+```
+
+```{r}
+
+results <- data.frame(epsilon = numeric(), runtime = numeric())
+
+epsilon_values <- seq(0.1, 1.0, by = 0.1)
+
+for (epsilon in epsilon_values) {
+  start_time <- Sys.time()
+
+  monthly_accidents$Total_Accidents_Noisy <- sapply(monthly_accidents$Total_Accidents, function(x) add_laplace_noise(x, sensitivity, epsilon))
+  
+  end_time <- Sys.time()
+  
+  runtime <- as.numeric(difftime(end_time, start_time, units = "secs"))
+  
+  results <- rbind(results, data.frame(epsilon = epsilon, runtime = runtime))
+}
+
+print(results)
+
+
+plot <- ggplot(results, aes(x = epsilon, y = runtime)) +
+  geom_line(color = "green") +
+  geom_point(color = "green") +
+  labs(title = "Epsilon Total Accidents Query Runtime Line Chart", x = "Epsilon", y = "Runtime (seconds)") +
+  theme_minimal()
+
+print(plot)
+
+ggsave("Epsilon_Total_Accidents_Query_Runtime_Line_Chart.png", plot = plot, width = 8, height = 6)
+
+```
+
+
+```{r}
+library(dplyr)
+
+rlaplace <- function(n, location = 0, scale = 1) {
+  u <- runif(n, min = -0.5, max = 0.5)
+  return(location - scale * sign(u) * log(1 - 2 * abs(u)))
+}
+
+sensitivity <- 1
+epsilon <- 0.4
+
 add_laplace_noise <- function(value, sensitivity, epsilon) {
   scale <- sensitivity / epsilon
   noise <- rlaplace(1, location = 0, scale = scale)
@@ -50,4 +149,339 @@ head(position_data)
 
 ```
 
+```{r}
+library(dplyr)
+
+position_data <- position_data %>%
+  mutate(
+    latitude_error = abs(LATITUDE - LATITUDE_Noisy),
+    longitude_error = abs(LONGITUDE - LONGITUDE_Noisy)
+  )
+
+position_data 
+
+```
+
+```{r}
+library(ggplot2)
+
+epsilon_values <- 0.4
+
+
+position_data <- position_data %>%
+  mutate(epsilon = epsilon_values)
+
+
+position_data <- position_data %>%
+  mutate(
+    LATITUDE_Noisy = LATITUDE + rlaplace(n(), location = 0, scale = 1 / epsilon),
+    LONGITUDE_Noisy = LONGITUDE + rlaplace(n(), location = 0, scale = 1 / epsilon),
+    latitude_error = abs(LATITUDE - LATITUDE_Noisy),
+    longitude_error = abs(LONGITUDE - LONGITUDE_Noisy)
+  )
+
+
+ggplot(position_data, aes(x = epsilon, y = latitude_error)) +
+  geom_point(alpha = 0.5) +
+  geom_jitter(color = "blue") +
+  facet_wrap(~ epsilon) +
+  labs(title = "Latitude Error Distribution for Epsilon",
+       x = "Epsilon", y = "Latitude Error") +
+  theme_minimal()
+
+
+ggsave("Epsilon_Latitude_Error_Distribution.png", width = 12, height = 10)
+
+```
+
+```{r}
+
+results <- data.frame(epsilon = numeric(), runtime = numeric())
+
+epsilon_values <- seq(0.1, 1.0, by = 0.1)
+
+for (epsilon in epsilon_values) {
+  start_time <- Sys.time()
+
+  accidents_data$LATITUDE_Noisy <- ifelse(!is.na(accidents_data$LATITUDE),
+                                         sapply(accidents_data$LATITUDE, function(x) add_laplace_noise(x, sensitivity, epsilon)),NA)
+  
+  end_time <- Sys.time()
+  
+  runtime <- as.numeric(difftime(end_time, start_time, units = "secs"))
+  
+  results <- rbind(results, data.frame(epsilon = epsilon, runtime = runtime))
+}
+
+print(results)
+
+
+plot <- ggplot(results, aes(x = epsilon, y = runtime)) +
+  geom_line(color = "blue") +
+  geom_point(color = "blue") +
+  labs(title = "Epsilon Latitude Query Runtime Line Chart", x = "Epsilon", y = "Runtime (seconds)") +
+  theme_minimal()
+
+print(plot)
+
+ggsave("Epsilon_Latitude_Query_Runtime_Line_Chart.png", plot = plot, width = 8, height = 6)
+
+```
+
+
+```{r}
+
+library(ggplot2)
+
+ggplot(position_data, aes(x = epsilon, y = longitude_error)) +
+  geom_point(alpha = 0.5) +
+  geom_jitter(color = "red") +
+  facet_wrap(~ epsilon) +
+  labs(title = "Longitude Error Distribution for Epsilon",
+       x = "Epsilon", y = "Longitude Error") +
+  theme_minimal()
+
+
+ggsave("Epsilon_Longitude_Error_Distribution.png", width = 12, height = 10)
+
+```
+
+```{r}
+
+results <- data.frame(epsilon = numeric(), runtime = numeric())
+
+epsilon_values <- seq(0.1, 1.0, by = 0.1)
+
+for (epsilon in epsilon_values) {
+  start_time <- Sys.time()
+
+  accidents_data$LONGITUDE_Noisy <- ifelse(!is.na(accidents_data$LONGITUDE),
+                                         sapply(accidents_data$LONGITUDE, function(x) add_laplace_noise(x, sensitivity, epsilon)),NA)
+  
+  end_time <- Sys.time()
+  
+  runtime <- as.numeric(difftime(end_time, start_time, units = "secs"))
+  
+  results <- rbind(results, data.frame(epsilon = epsilon, runtime = runtime))
+}
+
+print(results)
+
+
+plot <- ggplot(results, aes(x = epsilon, y = runtime)) +
+  geom_line(color = "red") +
+  geom_point(color = "red") +
+  labs(title = "Epsilon Longitude Query Runtime Line Chart", x = "Epsilon", y = "Runtime (seconds)") +
+  theme_minimal()
+
+print(plot)
+
+ggsave("Epsilon_Longitude_Query_Runtime_Line_Chart.png", plot = plot, width = 8, height = 6)
+
+```
+
+
+```{r}
+
+library(dplyr)
+
+rlaplace <- function(n, location = 0, scale = 1) {
+  u <- runif(n, min = -0.5, max = 0.5)
+  return(location - scale * sign(u) * log(1 - 2 * abs(u)))
+}
+
+sensitivity <- 1
+epsilon <- 0.75
+
+add_laplace_noise <- function(value, sensitivity, epsilon) {
+  scale <- sensitivity / epsilon
+  noise <- rlaplace(1, location = 0, scale = scale)
+  return(value + noise)
+}
+
+accidents_data$COLLISION_ID <- as.numeric(as.character(accidents_data$COLLISION_ID))
+
+accidents_data$COLLISION_ID_Noisy <- ifelse(!is.na(accidents_data$COLLISION_ID),
+                                        sapply(accidents_data$COLLISION_ID, function(x) add_laplace_noise(x, sensitivity, epsilon)),NA)
+
+COLLISION_ID_data <- accidents_data[c("COLLISION_ID", "COLLISION_ID_Noisy")]
+
+head(COLLISION_ID_data)
+
+```
+
+```{r}
+
+library(dplyr)
+
+COLLISION_ID_data <- COLLISION_ID_data %>%
+  mutate(
+    COLLISION_ID_error = abs(COLLISION_ID - COLLISION_ID_Noisy),
+  )
+
+COLLISION_ID_data
+
+```
+
+```{r}
+library(ggplot2)
+
+epsilon_values <- 0.75
+
+COLLISION_ID_data <- COLLISION_ID_data %>%
+  mutate(
+    COLLISION_ID_Noisy = COLLISION_ID + rlaplace(n(), location = 0, scale = 1 / epsilon_values),
+    COLLISION_ID_error = abs(COLLISION_ID - COLLISION_ID_Noisy),
+    epsilon = epsilon_values
+  )
+
+plot <- ggplot(COLLISION_ID_data, aes(x = epsilon, y = COLLISION_ID_error)) +
+  geom_point(alpha = 0.5) +
+  geom_jitter(color = "purple") +
+  labs(title = "Collsion ID Error Distribution for Epsilon",
+       x = "Epsilon", y = "Collsion ID Error") +
+  theme_minimal()
+
+print(plot)
+
+ggsave("Epsilon_Collsion_ID_Error_Distribution.png", plot = plot, width = 12, height = 10)
+
+```
+
+```{r}
+
+results <- data.frame(epsilon = numeric(), runtime = numeric())
+
+epsilon_values <- seq(0.1, 1.0, by = 0.1)
+
+for (epsilon in epsilon_values) {
+  start_time <- Sys.time()
+
+  accidents_data$COLLISION_ID_Noisy <- ifelse(!is.na(accidents_data$COLLISION_ID),
+                                          sapply(accidents_data$COLLISION_ID, function(x) add_laplace_noise(x, sensitivity = 1, epsilon)), NA)
+  
+  end_time <- Sys.time()
+  
+  runtime <- as.numeric(difftime(end_time, start_time, units = "secs"))
+  
+  results <- rbind(results, data.frame(epsilon = epsilon, runtime = runtime))
+}
+
+print(results)
+
+
+plot <- ggplot(results, aes(x = epsilon, y = runtime)) +
+  geom_line(color = "purple") +
+  geom_point(color = "purple") +
+  labs(title = "Epsilon Collsion ID Query Runtime Line Chart", x = "Epsilon", y = "Runtime (seconds)") +
+  theme_minimal()
+
+print(plot)
+
+ggsave("Epsilon_Collsion_ID_Query_Runtime_Line_Chart.png", plot = plot, width = 8, height = 6)
+
+```
+
+
+
+```{r}
+
+library(dplyr)
+
+rlaplace <- function(n, location = 0, scale = 1) {
+  u <- runif(n, min = -0.5, max = 0.5)
+  return(location - scale * sign(u) * log(1 - 2 * abs(u)))
+}
+
+sensitivity <- 1
+epsilon <- 0.2
+
+add_laplace_noise <- function(value, sensitivity, epsilon) {
+  scale <- sensitivity / epsilon
+  noise <- rlaplace(1, location = 0, scale = scale)
+  return(value + noise)
+}
+
+accidents_data$ZIP.CODE <- as.numeric(as.character(accidents_data$ZIP.CODE))
+
+accidents_data$ZIP.CODE_Noisy <- ifelse(!is.na(accidents_data$ZIP.CODE),
+                                        sapply(accidents_data$ZIP.CODE, function(x) add_laplace_noise(x, sensitivity, epsilon)),NA)
+
+ZIP_CODE_data <- accidents_data[c("ZIP.CODE", "ZIP.CODE_Noisy")]
+
+head(ZIP_CODE_data)
+
+```
+
+```{r}
+
+library(dplyr)
+
+ZIP_CODE_data <- ZIP_CODE_data %>%
+  mutate(
+    ZIP.CODE_error = abs(ZIP.CODE - ZIP.CODE_Noisy),
+  )
+
+ZIP_CODE_data
+
+```
+
+```{r}
+
+epsilon_values <- 0.2
+
+ZIP_CODE_data <- ZIP_CODE_data %>%
+  mutate(
+    ZIP.CODE_Noisy = ZIP.CODE + rlaplace(n(), location = 0, scale = 1 / epsilon_values),
+    ZIP.CODE_error = abs(ZIP.CODE - ZIP.CODE_Noisy),
+    epsilon = epsilon_values
+  )
+
+plot <- ggplot(ZIP_CODE_data, aes(x = epsilon, y = ZIP.CODE_error)) +
+  geom_point(alpha = 0.5) +
+  geom_jitter(color = "orange") +
+  labs(title = "ZIP CODE Error Distribution for Epsilon",
+       x = "Epsilon", y = "ZIP CODE") +
+  theme_minimal()
+
+print(plot)
+
+ggsave("Epsilon_ZIP_CODE_Error_Distribution.png", plot = plot, width = 12, height = 10)
+
+
+```
+
+```{r}
+
+results <- data.frame(epsilon = numeric(), runtime = numeric())
+
+epsilon_values <- seq(0.1, 1.0, by = 0.1)
+
+for (epsilon in epsilon_values) {
+  start_time <- Sys.time()
+
+  accidents_data$ZIP.CODE_Noisy <- ifelse(!is.na(accidents_data$ZIP.CODE),
+                                          sapply(accidents_data$ZIP.CODE, function(x) add_laplace_noise(x, sensitivity = 1, epsilon)), NA)
+  
+  end_time <- Sys.time()
+  
+  runtime <- as.numeric(difftime(end_time, start_time, units = "secs"))
+  
+  results <- rbind(results, data.frame(epsilon = epsilon, runtime = runtime))
+}
+
+print(results)
+
+
+plot <- ggplot(results, aes(x = epsilon, y = runtime)) +
+  geom_line(color = "orange") +
+  geom_point(color = "orange") +
+  labs(title = "Epsilon Zip Code Query Runtime Line Chart", x = "Epsilon", y = "Runtime (seconds)") +
+  theme_minimal()
+
+print(plot)
+
+ggsave("Epsilon_Zip_Code_Query_Runtime_Line_Chart.png", plot = plot, width = 8, height = 6)
+
+```
 
